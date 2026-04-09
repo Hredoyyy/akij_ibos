@@ -1,4 +1,4 @@
-import type { QuestionType, AttemptStatus } from '@/generated/prisma';
+import type { QuestionType, AttemptStatus } from '@prisma/client';
 
 // ─── Exam Types ────────────────────────────────────
 

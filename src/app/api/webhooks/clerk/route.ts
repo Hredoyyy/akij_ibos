@@ -1,8 +1,9 @@
+export const dynamic = 'force-dynamic';
 import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import type { Role } from '@/generated/prisma';
+import type { Role } from '@prisma/client';
 
 interface ClerkWebhookEvent {
   type: string;
