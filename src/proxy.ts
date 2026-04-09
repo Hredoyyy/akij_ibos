@@ -11,6 +11,21 @@ const isPublicRoute = createRouteMatcher([
 const isEmployerRoute = createRouteMatcher(['/employer(.*)', '/api/exams(.*)']);
 const isCandidateRoute = createRouteMatcher(['/candidate(.*)']);
 
+function extractRoleFromSessionClaims(sessionClaims: unknown): 'EMPLOYER' | 'CANDIDATE' {
+  if (!sessionClaims || typeof sessionClaims !== 'object') {
+    return 'CANDIDATE';
+  }
+
+  const claims = sessionClaims as Record<string, unknown>;
+  const rawRole = claims?.role;
+
+  if (typeof rawRole !== 'string') {
+    return 'CANDIDATE';
+  }
+
+  return rawRole.toUpperCase() === 'EMPLOYER' ? 'EMPLOYER' : 'CANDIDATE';
+}
+
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth();
 
@@ -26,8 +41,8 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Get role from session claims (Clerk public metadata)
-  const role = (sessionClaims?.metadata as { role?: string })?.role || 'CANDIDATE';
+  // Resolve role from Clerk API first (source of truth), fallback to session claims
+  const role = extractRoleFromSessionClaims(sessionClaims);
 
   // Handle /dashboard redirect based on role
   if (req.nextUrl.pathname === '/dashboard') {
