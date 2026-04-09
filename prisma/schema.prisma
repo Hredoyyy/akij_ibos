@@ -1,0 +1,172 @@
+// Online Assessment Platform - Database Schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ─────────────────────────────────────────
+
+enum Role {
+  EMPLOYER
+  CANDIDATE
+}
+
+enum QuestionType {
+  CHECKBOX
+  RADIO
+  TEXT
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  TIMED_OUT
+  VIOLATION_TERMINATED
+}
+
+// ─── User ──────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  role      Role     @default(CANDIDATE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exams    Exam[]        @relation("EmployerExams")
+  attempts ExamAttempt[] @relation("CandidateAttempts")
+}
+
+// ─── Exam ──────────────────────────────────────────
+
+model Exam {
+  id              String  @id @default(uuid())
+  title           String
+  totalCandidates Int
+  totalSlots      Int
+  duration        Int     // in minutes (applies to all slots)
+  negativeMarking Boolean @default(false)
+  employerId      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employer User          @relation("EmployerExams", fields: [employerId], references: [id])
+  slots    ExamSlot[]
+  attempts ExamAttempt[]
+
+  @@index([employerId])
+}
+
+// ─── Exam Slot ─────────────────────────────────────
+// Each slot = a specific time window with its own question set.
+// e.g., Slot 1: 1pm–2pm (Set A), Slot 2: 5pm–6pm (Set B)
+
+model ExamSlot {
+  id         String   @id @default(uuid())
+  examId     String
+  slotNumber Int      // 1, 2, 3...
+  startTime  DateTime
+  endTime    DateTime
+
+  exam        Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionSet QuestionSet?
+  attempts    ExamAttempt[]
+
+  @@unique([examId, slotNumber])
+  @@index([examId])
+  @@index([startTime, endTime])
+}
+
+// ─── Question Set ──────────────────────────────────
+// A collection of questions assigned to a specific slot.
+
+model QuestionSet {
+  id         String @id @default(uuid())
+  examSlotId String @unique // 1:1 with ExamSlot
+  name       String // "Set A", "Set B", etc.
+
+  examSlot  ExamSlot   @relation(fields: [examSlotId], references: [id], onDelete: Cascade)
+  questions Question[]
+}
+
+// ─── Question ──────────────────────────────────────
+// Type is per-question (not per-exam).
+
+model Question {
+  id            String       @id @default(uuid())
+  questionSetId String
+  title         String
+  type          QuestionType // RADIO, CHECKBOX, or TEXT — set per question
+  points        Float        @default(1) // How much this question is worth
+  order         Int          @default(0)
+
+  questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  options     Option[]
+  answers     Answer[]
+
+  @@index([questionSetId])
+}
+
+// ─── Option ────────────────────────────────────────
+// For RADIO/CHECKBOX questions. Default 4 slots, can add more.
+
+model Option {
+  id         String  @id @default(uuid())
+  questionId String
+  text       String
+  isCorrect  Boolean @default(false)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+// ─── Exam Attempt ──────────────────────────────────
+
+model ExamAttempt {
+  id          String        @id @default(uuid())
+  candidateId String
+  examId      String
+  examSlotId  String
+  startedAt   DateTime      @default(now())
+  submittedAt DateTime?
+  score       Float?
+  violations  Int           @default(0)
+  status      AttemptStatus @default(IN_PROGRESS)
+
+  candidate User     @relation("CandidateAttempts", fields: [candidateId], references: [id])
+  exam      Exam     @relation(fields: [examId], references: [id])
+  examSlot  ExamSlot @relation(fields: [examSlotId], references: [id])
+  answers   Answer[]
+
+  @@unique([candidateId, examId])
+  @@index([candidateId])
+  @@index([examId])
+  @@index([examSlotId])
+}
+
+// ─── Answer ────────────────────────────────────────
+
+model Answer {
+  id                String   @id @default(uuid())
+  attemptId         String
+  questionId        String
+  selectedOptionIds String[]
+  textAnswer        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  attempt  ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+}
